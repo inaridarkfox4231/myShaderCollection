@@ -57,7 +57,11 @@
 // しかしこれだとなぜimageで勝手にsetUniformっちゃうのか説明がつかない
 // なんともはやsetUniform呼び出さなくても勝手に入っちゃうのよ。意味不明！！！！
 
-const SHOW_PERFORMANCE = true;
+// 結論
+// imageを使わないで直接シェーダーで書いちゃえ。
+// デプステストをオンオフするsayoさんのアイデア使う。
+
+const SHOW_PERFORMANCE = false;
 const PERFORMANCE_COUNTSPAN = 30;
 
 const dx = [1, 0, -1, 0];
@@ -80,7 +84,6 @@ const vs =
 "  gl_Position = vec4(aPosition, 1.0);" +
 "}";
 
-let bg;
 let bgShader;
 const fsBG =
 "precision mediump float;" +
@@ -193,9 +196,6 @@ let fsArrow =
 
 // リザーブする必要性
 
-let dummy;
-let dum;
-
 let cells = [];
 let mat = [];
 let arrowGr; // 矢印グラフィック. 輪郭は灰色で中身は白で
@@ -251,13 +251,6 @@ function setup(){
   arrowShader = createShader(vsArrow, fsArrow);
   arrowShader.isPointShader = () => true;
   _gl.userPointShader = arrowShader;
-
-
-
-  dummy = createGraphics(100,100);
-  dummy.background(255,0,0);
-  dum = createGraphics(10,10);
-  dum.background(0,0,255);
 }
 
 function draw() {
@@ -269,11 +262,8 @@ function draw() {
 }
 
 function prepareBG(){
-  bg = createGraphics(width, height, WEBGL); // ここでミスってたっぽいね。大きさはwidth,heightを使わないと・・
-  bgShader = bg.createShader(vs, fsBG);
-	bg.shader(bgShader);
-	bgShader.setUniform("uResolution", [bg.width, bg.height]);
-	bg.quad(-1, -1, -1, 1, 1, 1, 1, -1);
+  // シェーダーを作るだけ
+  bgShader = createShader(vs, fsBG);
 }
 
 function prepareArrow(){
@@ -312,17 +302,21 @@ function cellUpdate(){
 }
 
 function cellDraw(){
-  clear();
-  //image(bg, 0, 0);
-  image(bg, -width * 0.5, -height * 0.5);
 
-  // imageによりなぜかsetUniformが実行されてしまう原因不明のバグを防ぐため、
-  // 画面外に矢印を描画する意味不明な処理をはさんでいます
-  image(arrowGr, width, height);
+	// まずシェーダーをリセットして
+	// それからデプステストをオフにした状態でいつものシェーダー芸で描画してあとで戻す。めでたし。
+  resetShader();
+	gl.disable(gl.DEPTH_TEST);
+  shader(bgShader);
+	noStroke();
+	bgShader.setUniform("uResolution", [width, height]);
+	quad(-1, -1, -1, 1, 1, 1, 1, -1);
+	gl.enable(gl.DEPTH_TEST);
 
   for(let c of cells){ c.draw(); }
   resetShader();
   shader(arrowShader);
+	stroke(0);
   arrowShader.setUniform("uArrow", arrowGr);
   myArrows(ARROW_NUM);
   //noLoop();
@@ -451,11 +445,10 @@ function myArrows(num){
   if(!_gl.geometryInHash(gId)){
     const _geom = new p5.Geometry();
     let v = createVector();
-		let angle, radius, x, y, z;
     for(let i = 0; i < num; i++){
       // 流れ的に最初にここにくるときにすでに個別のdrawでdataの中身を埋めているので
       // ここでなんかdataに入れちゃうとまずい。だからここでdataはいじれない。
-      _geom.vertices.push(v.set(x, y, z).copy());
+      _geom.vertices.push(v.set(0, 0, 0).copy());
     }
     pBuf = _gl.createBuffers(gId, _geom);
   }
